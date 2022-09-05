@@ -1,0 +1,6 @@
+zig-cache/
+zig-out/
+src2/
+test/
+c/
+cimport.zig
