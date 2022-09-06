@@ -32,33 +32,26 @@ pub const Registry = opaque {
 
     pub fn addListener(
         self: *Registry,
-        allocator: anytype,
+        allocator: std.mem.Allocator,
         comptime DataType: type,
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
-    ) utils.Hook(Event, DataType) {
-        const D = utils.Hook(Event, DataType).D;
-
+    ) *utils.Listener(Event, DataType) {
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_REGISTRY_EVENTS,
             c.struct_pw_registry_events,
             Event,
         );
 
-        var listener = allocator.create(c.struct_spa_hook) catch unreachable;
-        // listener.* = std.mem.zeroes(c.struct_spa_hook);
-        var fn_and_data = allocator.create(D) catch unreachable;
-        fn_and_data.* = .{ .f = _listener, .d = data };
+        var listener = utils.Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
 
         _ = spa.spa_interface_call_method(self, c.pw_registry_methods, "add_listener", .{
-            listener,
+            &listener.spa_hook,
             &c_events,
-            fn_and_data,
+            &listener.cb,
         });
-        return utils.Hook(Event, DataType){
-            .hook = listener,
-            .cb = fn_and_data,
-        };
+
+        return listener;
     }
 
     pub fn bind(self: *Registry, object: Global) !*Proxy {
@@ -120,6 +113,12 @@ pub const ObjType = enum {
             if (@enumToInt(self) == f.value) {
                 return "PipeWire:Interface:" ++ f.name;
             }
+        }
+        @panic("Other obj type");
+    }
+    pub fn toType(self: ObjType) type {
+        if (self == .Node) {
+            return pw.Node;
         }
         @panic("Other obj type");
     }

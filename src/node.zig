@@ -2,6 +2,7 @@ const std = @import("std");
 const pw = @import("pipewire.zig");
 const spa = @import("spa.zig");
 const utils = pw.utils;
+const Listener = utils.Listener;
 const c = pw.c;
 
 pub const Node = opaque {
@@ -17,32 +18,29 @@ pub const Node = opaque {
         },
         // static void event_param(void *_data, int seq, uint32_t id,
         // uint32_t index, uint32_t next, const struct spa_pod *param)
-
     };
 
     pub fn addListener(
         self: *Node,
-        allocator: anytype,
+        allocator: std.mem.Allocator,
         comptime DataType: type,
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
-    ) void {
-        const D = struct { f: @TypeOf(_listener), d: *DataType };
+    ) *Listener(Event, DataType) {
+        // const D = struct { f: @TypeOf(_listener), d: *DataType };
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_NODE_EVENTS,
             c.struct_pw_node_events,
             Event,
         );
-        var listener = allocator.create(c.struct_spa_hook) catch unreachable;
-        listener.* = std.mem.zeroes(c.struct_spa_hook);
-        var fn_and_data = allocator.create(D) catch unreachable;
-        fn_and_data.* = .{ .f = _listener, .d = data };
+        var listener = Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
 
         _ = spa.spa_interface_call_method(self, c.pw_node_methods, "add_listener", .{
-            listener,
+            &listener.spa_hook,
             &c_events,
-            fn_and_data,
+            &listener.cb,
         });
+        return listener;
     }
 };
 pub const NodeInfo = extern struct {

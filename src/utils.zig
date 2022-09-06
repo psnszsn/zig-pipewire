@@ -83,15 +83,29 @@ pub fn generateEventsStruct(version: u32, comptime EventsCType: type, comptime E
     return c_events;
 }
 
-pub fn Hook(comptime EventsUnion: type, comptime DataType: type) type {
+pub fn Listener(comptime EventsUnion: type, comptime DataType: type) type {
     return struct {
+        const Self = @This();
         pub const D = struct { f: *const fn (data: *DataType, event: EventsUnion) void, d: *DataType };
-        hook: *c.struct_spa_hook,
-        cb: *D,
-        pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-            c.spa_hook_remove(self.hook);
-            allocator.destroy(self.hook);
-            allocator.destroy(self.cb);
+        allocator: std.mem.Allocator,
+        spa_hook: c.struct_spa_hook,
+        cb: D,
+        pub fn init(
+            allocator: std.mem.Allocator,
+            listener: *const fn (*DataType, EventsUnion) void,
+            data: *DataType,
+        ) !*Self {
+            var self = try allocator.create(Self);
+            self.* = .{
+                .allocator = allocator,
+                .spa_hook = std.mem.zeroes(c.struct_spa_hook),
+                .cb = .{ .f = listener, .d = data },
+            };
+            return self;
+        }
+        pub fn deinit(self: *Self) void {
+            c.spa_hook_remove(&self.spa_hook);
+            self.allocator.destroy(self);
         }
     };
 }

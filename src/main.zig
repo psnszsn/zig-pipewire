@@ -10,6 +10,16 @@ const Global = struct {
     version: u32,
     props: std.StringArrayHashMap([]const u8),
     pub fn deinit(self: *Global) void {
+        if (self.listener) |l_ptr| {
+            if (self.typ == .Node) {
+                var listener = @ptrCast(
+                    *pw.utils.Listener(pw.Node.Event, RemoteData),
+                    l_ptr,
+                );
+                listener.deinit();
+            }
+        }
+
         var it = self.props.iterator();
         while (it.next()) |prop| {
             self.props.allocator.free(prop.key_ptr.*);
@@ -38,7 +48,7 @@ const RemoteData = struct {
 pub fn coreListener(data: *RemoteData, event: pw.Core.Event) void {
     // _ = data;
     _ = event;
-    data.deinit();
+    // data.deinit();
     data.loop.quit();
     std.debug.print("DONE\n", .{});
 }
@@ -137,13 +147,15 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
             _ = e.typ.clientVersion();
             // std.debug.print("{s}\n", .{data.globals.items[data.globals.items.len - 1].typ});
 
+            var g = data.globals.getPtr(e.id) orelse unreachable;
+
             switch (e.typ) {
                 .Node => {
                     std.debug.print("object: id:{} type:{} v:{}\n", .{ e.id, e.typ, e.version });
                     std.debug.print("props: {}\n\n", .{e.props});
                     var node = proxy.downcast(pw.Node);
                     var listener = node.addListener(data.allocator, RemoteData, data, nodeListener);
-                    _ = listener;
+                    g.listener = listener;
                     _ = data.core.sync(pw.c.PW_ID_CORE, 0);
                 },
                 .Metadata => {
@@ -191,6 +203,7 @@ pub fn main() anyerror!void {
     defer registry.destroy();
 
     const rd = core.asProxy().getUserData(RemoteData);
+    defer rd.deinit();
     rd.* = .{
         .globals = @TypeOf(rd.globals).init(allocator),
         .allocator = allocator,
@@ -200,11 +213,11 @@ pub fn main() anyerror!void {
     };
 
     var regitry_hook = registry.addListener(allocator, RemoteData, rd, registryListener);
-    defer regitry_hook.deinit(allocator);
+    defer regitry_hook.deinit();
     _ = regitry_hook;
 
     var core_hook = core.addListener(allocator, RemoteData, rd, coreListener);
-    defer core_hook.deinit(allocator);
+    defer core_hook.deinit();
     _ = core_hook;
     _ = core.sync(pw.c.PW_ID_CORE, 0);
 
