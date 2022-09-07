@@ -17,11 +17,14 @@ const Global = struct {
                     l_ptr,
                 );
                 listener.deinit();
+            } else {
+                unreachable;
             }
         }
 
         var it = self.props.iterator();
         while (it.next()) |prop| {
+            // std.debug.print("key: {s}\n", .{prop.key_ptr.*});
             self.props.allocator.free(prop.key_ptr.*);
             self.props.allocator.free(prop.value_ptr.*);
         }
@@ -46,51 +49,39 @@ const RemoteData = struct {
 };
 
 pub fn coreListener(data: *RemoteData, event: pw.Core.Event) void {
-    // _ = data;
+    _ = data;
     _ = event;
     // data.deinit();
-    data.loop.quit();
+    // data.loop.quit();
     std.debug.print("DONE\n", .{});
 }
+var a: usize = 0;
 pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
     _ = data;
     switch (event) {
         .info => |e| {
-            var g = data.globals.get(e.id).?;
-            // std.debug.assert(g.props == e.props);
-            // std.debug.print("{} \n", .{e.props});
-            _ = g;
-            // var len = std.mem.len(e.props.*.items);
-            std.debug.print("INFO {}\n", .{e});
-            // std.debug.print("INFO {?s}\n", .{g.props.get("node.name")});
-            for (e.props.asSlice()) |prop| {
-                const c_key = std.mem.span(prop.key);
-                const c_val = std.mem.span(prop.value);
-                // if (std.mem.eql(u8, c_key, "application.name")) {
-                //     continue;
-                // }
-                if (g.props.get(c_key)) |old| {
-                    if (!std.mem.eql(u8, old, c_val)) {
-                        const val = data.allocator.dupe(u8, std.mem.span(prop.value)) catch unreachable;
-                        g.props.put(c_key, val) catch unreachable;
-                        std.debug.print("UPDATE: key:{s} OLD:{s} NEW:{s}\n", .{ c_key, old, val });
-                        data.allocator.free(old);
-                    } else {
-                        std.debug.print("EXISTING: key:{s} VAL:{s}\n", .{ c_key, c_val });
+            var g = data.globals.getPtr(e.id).?;
+            std.debug.assert(g.typ == .Node);
+
+            std.debug.print("INFO {} - {?s} - {} props - {} params\n", .{
+                e.id,
+                g.props.get("node.name"),
+                e.props.asSlice().len,
+                e.n_params,
+            });
+
+            if (e.props.n_items > 0) {
+                g.props = blk: {
+                    var it = g.props.iterator();
+                    while (it.next()) |prop| {
+                        // std.debug.print("key: {s}\n", .{prop.key_ptr.*});
+                        g.props.allocator.free(prop.key_ptr.*);
+                        g.props.allocator.free(prop.value_ptr.*);
                     }
-                } else {
-                    const key = data.allocator.dupe(u8, c_key) catch unreachable;
-                    const val = data.allocator.dupe(u8, c_val) catch unreachable;
-                    std.debug.print("NEW: key:{s} VAL:{s}\n", .{ key, val });
-                    g.props.put(key, val) catch unreachable;
-                }
-                // std.debug.print("INFO {?s}\n", .{g.props.get("node.name")});
-                // std.debug.print("{s}\n", .{key});
-                // if (std.mem.eql(u8, c_key, "node.name")) {
-                //     std.debug.print("{s}\n", .{prop.value});
-                // }
+                    g.props.deinit();
+                    break :blk e.props.toArrayHashMap(data.allocator);
+                };
             }
-            std.debug.print("\n", .{});
         },
         .param => |param| {
             std.debug.print("PARAM {} \n", .{param});
@@ -101,11 +92,6 @@ pub fn metadataListener(data: *RemoteData, event: pw.Metadata.Event) void {
     _ = data;
     _ = event;
     const prop = event.property;
-    // if (prop.key == null) {
-    //     std.debug.print("remove: id:{} all keys\n", .{prop.id});
-    // } else if (prop.value == null) {
-    //     std.debug.print("remove: id:{} key:{}\n", .{prop.id, prop.key});
-    // } else {
     if (prop.type != null and std.mem.eql(u8, prop.type.?, "Spa:String:JSON")) {
         var parser = std.json.Parser.init(data.allocator, false);
         defer parser.deinit();
@@ -140,23 +126,18 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
                 var v = old.value;
                 std.debug.print("GLOBAL REPLACED {?s}\n", .{v.props.get("node.name")});
                 v.deinit();
+                unreachable;
             }
             var proxy = data.registry.bind(e) catch unreachable;
-            // std.debug.print("{s}\n", .{proxy.get_type()[0]});
-            _ = proxy;
-            _ = e.typ.clientVersion();
-            // std.debug.print("{s}\n", .{data.globals.items[data.globals.items.len - 1].typ});
-
             var g = data.globals.getPtr(e.id) orelse unreachable;
 
+            std.debug.print("GLOBAL added : id:{} type:{} v:{}\n", .{ e.id, e.typ, e.version });
             switch (e.typ) {
                 .Node => {
-                    std.debug.print("object: id:{} type:{} v:{}\n", .{ e.id, e.typ, e.version });
                     std.debug.print("props: {}\n\n", .{e.props});
                     var node = proxy.downcast(pw.Node);
                     var listener = node.addListener(data.allocator, RemoteData, data, nodeListener);
                     g.listener = listener;
-                    _ = data.core.sync(pw.c.PW_ID_CORE, 0);
                 },
                 .Metadata => {
                     // std.debug.print("METADATA: \n", .{});
@@ -169,7 +150,7 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
         .global_remove => |e| {
             var kv = data.globals.fetchRemove(e.id).?;
             var g = kv.value;
-            // std.debug.print("GLOBAL REMOVED {} {?s}!!!!!!!\n", .{g.typ, g.props.get("node.name")});
+            std.debug.print("GLOBAL REMOVED  {} {} {?s}!!!!!!!\n", .{ e.id, g.typ, g.props.get("node.name") });
             g.deinit();
         },
     }

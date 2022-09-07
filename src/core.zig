@@ -65,7 +65,7 @@ pub const Core = opaque {
             Event,
         );
 
-        var listener = utils.Listener(Event, DataType).init(allocator,_listener, data) catch unreachable;
+        var listener = utils.Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
 
         _ = spa.spa_interface_call_method(self, c.pw_core_methods, "add_listener", .{
             &listener.spa_hook,
