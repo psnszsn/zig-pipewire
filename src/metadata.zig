@@ -19,22 +19,19 @@ pub const Metadata = opaque {
         comptime DataType: type,
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
-    ) void {
-        const D = struct { f: @TypeOf(_listener), d: *DataType };
+    ) *utils.Listener(Event, DataType) {
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_METADATA_EVENTS,
             c.struct_pw_metadata_events,
             Event,
         );
-        var listener = allocator.create(c.struct_spa_hook) catch unreachable;
-        listener.* = std.mem.zeroes(c.struct_spa_hook);
-        var fn_and_data = allocator.create(D) catch unreachable;
-        fn_and_data.* = .{ .f = _listener, .d = data };
 
+        var listener = utils.Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
         _ = spa.spa_interface_call_method(self, c.pw_metadata_methods, "add_listener", .{
-            listener,
+            &listener.spa_hook,
             &c_events,
-            fn_and_data,
+            &listener.cb,
         });
+        return listener;
     }
 };

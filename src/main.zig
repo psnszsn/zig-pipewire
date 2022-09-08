@@ -17,6 +17,12 @@ const Global = struct {
                     l_ptr,
                 );
                 listener.deinit();
+            } else if (self.typ == .Metadata) {
+                var listener = @ptrCast(
+                    *pw.utils.Listener(pw.Metadata.Event, RemoteData),
+                    l_ptr,
+                );
+                listener.deinit();
             } else {
                 unreachable;
             }
@@ -38,7 +44,7 @@ const RemoteData = struct {
     core: *pw.Core,
     loop: *pw.MainLoop,
     globals: std.AutoHashMap(u32, Global),
-    default_sink: ?[]const u8 = null,
+    default_sink_id: ?u32 = null,
     pub fn deinit(self: *RemoteData) void {
         var it = self.globals.valueIterator();
         while (it.next()) |g| {
@@ -84,13 +90,12 @@ pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
             }
         },
         .param => |param| {
-            std.debug.print("PARAM {} \n", .{param});
+            _ = param;
+            // std.debug.print("PARAM {} \n", .{param});
         },
     }
 }
 pub fn metadataListener(data: *RemoteData, event: pw.Metadata.Event) void {
-    _ = data;
-    _ = event;
     const prop = event.property;
     if (prop.type != null and std.mem.eql(u8, prop.type.?, "Spa:String:JSON")) {
         var parser = std.json.Parser.init(data.allocator, false);
@@ -101,14 +106,22 @@ pub fn metadataListener(data: *RemoteData, event: pw.Metadata.Event) void {
 
         if (std.mem.eql(u8, prop.key, "default.audio.sink")) {
             const default_sink = tree.root.Object.get("name").?.String;
-            // data.default_sink = data.allocator.dupe(u8, default_sink);
-            data.default_sink = default_sink;
-            std.debug.print("SINK {s}\n", .{default_sink});
+
+            var it = data.globals.valueIterator();
+            while (it.next()) |g| {
+                if (g.typ == .Node) {
+                    if (g.props.get("node.name")) |name| {
+                        if (std.mem.eql(u8, name, default_sink)) {
+                            data.default_sink_id = g.id;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                unreachable;
+            }
         }
     }
-    std.debug.print("update: id:{} key:{s} value:{s} type:{?s}\n", .{ prop.id, prop.key, prop.value, prop.type });
-
-    // }
 }
 
 pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
@@ -116,18 +129,14 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
         .global => |e| {
             if (e.typ == .Profiler) return;
 
-            if (data.globals.fetchPut(e.id, .{
+            data.globals.putNoClobber(e.id, .{
                 .id = e.id,
                 .typ = e.typ,
                 .permissions = e.permissions,
                 .version = e.version,
                 .props = e.props.toArrayHashMap(data.allocator),
-            }) catch unreachable) |old| {
-                var v = old.value;
-                std.debug.print("GLOBAL REPLACED {?s}\n", .{v.props.get("node.name")});
-                v.deinit();
-                unreachable;
-            }
+            }) catch unreachable;
+
             var proxy = data.registry.bind(e) catch unreachable;
             var g = data.globals.getPtr(e.id) orelse unreachable;
 
@@ -140,9 +149,10 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
                     g.listener = listener;
                 },
                 .Metadata => {
-                    // std.debug.print("METADATA: \n", .{});
-                    // var metadata = proxy.downcast(pw.Metadata);
-                    // metadata.addListener(data.allocator, RemoteData, data, metadataListener);
+                    std.debug.print("METADATA: \n", .{});
+                    var metadata = proxy.downcast(pw.Metadata);
+                    var listener = metadata.addListener(data.allocator, RemoteData, data, metadataListener);
+                    g.listener = listener;
                 },
                 else => {},
             }
@@ -193,18 +203,41 @@ pub fn main() anyerror!void {
         .loop = loop,
     };
 
+    // TODO: Do not assume passed type is a pointer
     var regitry_hook = registry.addListener(allocator, RemoteData, rd, registryListener);
     defer regitry_hook.deinit();
     _ = regitry_hook;
 
-    var core_hook = core.addListener(allocator, RemoteData, rd, coreListener);
-    defer core_hook.deinit();
-    _ = core_hook;
-    _ = core.sync(pw.c.PW_ID_CORE, 0);
+    // _ = core.sync(pw.c.PW_ID_CORE, 0);
 
+    try roundtrip(loop, core, allocator);
+    try roundtrip(loop, core, allocator);
+    try roundtrip(loop, core, allocator);
+    std.debug.print("default sink: {?s}\n", .{
+        rd.globals.get(rd.default_sink_id.?).?.props.get("node.name"),
+    });
     // try loop.run_();
+    // loop.run_();
+}
+
+pub fn roundtrip(loop: *pw.MainLoop, core: *pw.Core, allocator: std.mem.Allocator) !void {
+    // var done = false;
+    _ = core.sync(pw.c.PW_ID_CORE, 0);
+    const l = struct {
+        pub fn coreListener(_loop: *pw.MainLoop, event: pw.Core.Event) void {
+            _ = event;
+            // data.deinit();
+            _loop.quit();
+            std.debug.print("DONE\n", .{});
+        }
+    }.coreListener;
+
+    var core_hook = core.addListener(allocator, pw.MainLoop, loop, &l);
+    defer core_hook.deinit();
+
     loop.run_();
 }
+
 test "basic test" {
     try std.testing.expectEqual(10, 3 + 7);
 }
