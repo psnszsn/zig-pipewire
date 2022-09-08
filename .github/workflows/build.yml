@@ -1,0 +1,14 @@
+name: Build zig-pipewire
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install deps
+        run: pacman -Syu --noconfirm base-devel pipewire
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+      - run: zig build
