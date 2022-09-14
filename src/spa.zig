@@ -89,7 +89,6 @@ pub const SpaDict = extern struct {
     pub fn toArrayHashMap(self: SpaDict, allocator: std.mem.Allocator) std.StringArrayHashMap([]const u8) {
         var hm = std.StringArrayHashMap([]const u8).init(allocator);
         for (self.asSlice()) |item| {
-            _ = item;
             const key = allocator.dupe(u8, std.mem.span(item.key)) catch unreachable;
             const val = allocator.dupe(u8, std.mem.span(item.value)) catch unreachable;
             // std.debug.print("key:{s} val: {s}\n", .{key,val});

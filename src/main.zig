@@ -63,7 +63,6 @@ pub fn coreListener(data: *RemoteData, event: pw.Core.Event) void {
 }
 var a: usize = 0;
 pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
-    _ = data;
     switch (event) {
         .info => |e| {
             var g = data.globals.getPtr(e.id).?;
@@ -190,7 +189,6 @@ pub fn main() anyerror!void {
     defer core.disconnect();
 
     var registry = try core.getRegistry();
-    _ = registry;
     defer registry.destroy();
 
     const rd = core.asProxy().getUserData(RemoteData);
@@ -206,7 +204,6 @@ pub fn main() anyerror!void {
     // TODO: Do not assume passed type is a pointer
     var regitry_hook = registry.addListener(allocator, RemoteData, rd, registryListener);
     defer regitry_hook.deinit();
-    _ = regitry_hook;
 
     // _ = core.sync(pw.c.PW_ID_CORE, 0);
 
