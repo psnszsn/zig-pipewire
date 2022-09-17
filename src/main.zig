@@ -6,26 +6,12 @@ const Global = struct {
     id: u32,
     permissions: u32,
     typ: pw.ObjType,
-    listener: ?*anyopaque = null,
+    listener: ?*pw.utils.Listener = null,
     version: u32,
     props: std.StringArrayHashMap([]const u8),
     pub fn deinit(self: *Global) void {
-        if (self.listener) |l_ptr| {
-            if (self.typ == .Node) {
-                var listener = @ptrCast(
-                    *pw.utils.Listener(pw.Node.Event, RemoteData),
-                    l_ptr,
-                );
-                listener.deinit();
-            } else if (self.typ == .Metadata) {
-                var listener = @ptrCast(
-                    *pw.utils.Listener(pw.Metadata.Event, RemoteData),
-                    l_ptr,
-                );
-                listener.deinit();
-            } else {
-                unreachable;
-            }
+        if (self.listener) |l| {
+            l.deinit();
         }
 
         var it = self.props.iterator();
@@ -61,7 +47,6 @@ pub fn coreListener(data: *RemoteData, event: pw.Core.Event) void {
     // data.loop.quit();
     std.debug.print("DONE\n", .{});
 }
-var a: usize = 0;
 pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
     switch (event) {
         .info => |e| {
@@ -89,8 +74,7 @@ pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
             }
         },
         .param => |param| {
-            _ = param;
-            // std.debug.print("PARAM {} \n", .{param});
+            std.debug.print("PARAM {} \n", .{param});
         },
     }
 }

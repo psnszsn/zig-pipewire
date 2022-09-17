@@ -26,14 +26,14 @@ pub const Node = opaque {
         comptime DataType: type,
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
-    ) *Listener(Event, DataType) {
+    ) *Listener {
         // const D = struct { f: @TypeOf(_listener), d: *DataType };
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_NODE_EVENTS,
             c.struct_pw_node_events,
             Event,
         );
-        var listener = Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
+        var listener = Listener.init(allocator, _listener, data) catch unreachable;
 
         _ = spa.spa_interface_call_method(self, c.pw_node_methods, "add_listener", .{
             &listener.spa_hook,
@@ -53,6 +53,25 @@ pub const NodeInfo = extern struct {
     state: c.enum_pw_node_state,
     @"error": [*c]const u8,
     props: *spa.SpaDict,
-    params: [*c]c.struct_spa_param_info,
+    params: [*c]ParamInfo,
     n_params: u32,
+    pub fn getParamInfos(self: *const ParamInfo) []ParamInfo {
+        return self.params[0..self.n_params];
+    }
+
+};
+pub const ParamInfo = extern struct {
+    id: u32,
+    flags: u32,
+    user: u32,
+    padding: [5]u32,
+    const SERIAL = 1 << 0;
+    const READ = 1 << 1;
+    const WRITE = 1 << 2;
+    pub fn isRead(self: ParamInfo) bool {
+        return self.flags & READ;
+    }
+    pub fn isWrite(self: ParamInfo) bool {
+        return self.flags & WRITE;
+    }
 };

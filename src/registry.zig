@@ -36,14 +36,14 @@ pub const Registry = opaque {
         comptime DataType: type,
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
-    ) *utils.Listener(Event, DataType) {
+    ) *utils.Listener {
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_REGISTRY_EVENTS,
             c.struct_pw_registry_events,
             Event,
         );
 
-        var listener = utils.Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
+        var listener = utils.Listener.init(allocator, _listener, data) catch unreachable;
 
         _ = spa.spa_interface_call_method(self, c.pw_registry_methods, "add_listener", .{
             &listener.spa_hook,
@@ -113,12 +113,6 @@ pub const ObjType = enum {
             if (@enumToInt(self) == f.value) {
                 return "PipeWire:Interface:" ++ f.name;
             }
-        }
-        @panic("Other obj type");
-    }
-    pub fn toType(self: ObjType) type {
-        if (self == .Node) {
-            return pw.Node;
         }
         @panic("Other obj type");
     }

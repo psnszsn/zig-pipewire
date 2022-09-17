@@ -19,14 +19,14 @@ pub const Metadata = opaque {
         comptime DataType: type,
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
-    ) *utils.Listener(Event, DataType) {
+    ) *utils.Listener {
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_METADATA_EVENTS,
             c.struct_pw_metadata_events,
             Event,
         );
 
-        var listener = utils.Listener(Event, DataType).init(allocator, _listener, data) catch unreachable;
+        var listener = utils.Listener.init(allocator, _listener, data) catch unreachable;
         _ = spa.spa_interface_call_method(self, c.pw_metadata_methods, "add_listener", .{
             &listener.spa_hook,
             &c_events,
