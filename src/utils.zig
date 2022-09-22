@@ -43,8 +43,8 @@ pub fn generateEventsStruct(version: u32, comptime EventsCType: type, comptime E
                                             ti = @typeInfo(ti.Optional.child);
                                         }
                                         if (@Type(ti) == ([:0]const u8)) {
-                                            const ptr = @intToPtr([*c]const u8, arg);
-                                            if (@typeInfo(f.field_type) == .Optional and (arg == 0 or ptr.* == 0)) {
+                                            const ptr = @intToPtr([*:0]const u8, arg);
+                                            if (@typeInfo(f.field_type) == .Optional and (arg == 0 or ptr[0] == 0)) {
                                                 @field(r, f.name) = null;
                                             } else {
                                                 @field(r, f.name) = std.mem.span(ptr);
@@ -59,7 +59,6 @@ pub fn generateEventsStruct(version: u32, comptime EventsCType: type, comptime E
                                         }
                                     }
                                     break :blk r;
-                                    // unreachable;
                                 }
                             };
                             const ev = @unionInit(
@@ -83,11 +82,6 @@ pub fn generateEventsStruct(version: u32, comptime EventsCType: type, comptime E
     return c_events;
 }
 
-// pub fn Listener(comptime EventsUnion: type, comptime DataType: type) type {
-//     _ = EventsUnion;
-//     _ = DataType;
-//     return BListener;
-// }
 pub const Listener = struct {
     const Self = @This();
     pub const D = struct { f: *const anyopaque, d: *anyopaque };
@@ -96,7 +90,6 @@ pub const Listener = struct {
     cb: D,
     pub fn init(
         allocator: std.mem.Allocator,
-        // comptime EventsUnion: type,
         listener: *const anyopaque,
         data: *anyopaque,
     ) !*Self {

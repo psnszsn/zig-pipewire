@@ -1,5 +1,6 @@
 const std = @import("std");
-pub const c = @cImport({
+pub const SpaPod = @import("spa/pod.zig").SpaPod;
+const c = @cImport({
     @cInclude("pipewire/pipewire.h");
 });
 
@@ -35,14 +36,12 @@ pub fn spa_interface_call_method(
     );
 
     const f = @field(funcs, method_name) orelse unreachable;
-    // @compileLog(args);
-
     return @call(.{}, f, .{interface.cb.data} ++ args);
 }
 
 test {
     const struct_obj = extern struct { proxy: extern struct { interface: extern struct {
-        type: [*c]const u8,
+        type: [*:0]const u8,
         version: u32,
         cb: extern struct {
             funcs: ?*const anyopaque,
@@ -91,9 +90,7 @@ pub const SpaDict = extern struct {
         for (self.asSlice()) |item| {
             const key = allocator.dupe(u8, std.mem.span(item.key)) catch unreachable;
             const val = allocator.dupe(u8, std.mem.span(item.value)) catch unreachable;
-            // std.debug.print("key:{s} val: {s}\n", .{key,val});
             hm.putNoClobber(key, val) catch unreachable;
-            // std.debug.print("{} ", .{i});
         }
         return hm;
     }
@@ -107,17 +104,9 @@ pub const SpaDict = extern struct {
         _ = options;
 
         for (self.asSlice()) |item| {
-            // std.debug.print("{} ", .{i});
             try writer.print("{s}, ", .{item.key});
         }
 
         try writer.print("{} items ", .{self.n_items});
-
-        // try writer.writeAll("zazaza");
     }
-};
-
-pub const SpaPod = extern struct {
-    size: u32,
-    type: u32,
 };

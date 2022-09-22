@@ -8,7 +8,6 @@ const c = pw.c;
 pub const Node = opaque {
     pub const Event = union(enum) {
         info: *const NodeInfo,
-        // param,
         param: struct {
             seq: c_int,
             id: u32,
@@ -16,8 +15,6 @@ pub const Node = opaque {
             next: u32,
             spa_pod: *const spa.SpaPod,
         },
-        // static void event_param(void *_data, int seq, uint32_t id,
-        // uint32_t index, uint32_t next, const struct spa_pod *param)
     };
 
     pub fn addListener(
@@ -27,7 +24,6 @@ pub const Node = opaque {
         data: *DataType,
         comptime _listener: *const fn (data: *DataType, event: Event) void,
     ) *Listener {
-        // const D = struct { f: @TypeOf(_listener), d: *DataType };
         const c_events = comptime utils.generateEventsStruct(
             c.PW_VERSION_NODE_EVENTS,
             c.struct_pw_node_events,
@@ -42,7 +38,17 @@ pub const Node = opaque {
         });
         return listener;
     }
+
+    pub fn enumParams(self: *Node, seq: c_int, id: ParamType, index: u32, num: u32, filter: ?*spa.SpaPod) isize {
+        return spa.spa_interface_call_method(
+            self,
+            c.pw_node_methods,
+            "enum_params",
+            .{ seq, @enumToInt(id), index, num, @ptrCast(?*c.struct_spa_pod, filter) },
+        );
+    }
 };
+
 pub const NodeInfo = extern struct {
     id: u32,
     max_input_ports: u32,
@@ -51,17 +57,17 @@ pub const NodeInfo = extern struct {
     n_input_ports: u32,
     n_output_ports: u32,
     state: c.enum_pw_node_state,
-    @"error": [*c]const u8,
+    @"error": [*:0]const u8,
     props: *spa.SpaDict,
-    params: [*c]ParamInfo,
+    params: [*]ParamInfo,
     n_params: u32,
-    pub fn getParamInfos(self: *const ParamInfo) []ParamInfo {
+    pub fn getParamInfos(self: *const NodeInfo) []ParamInfo {
+        if (self.n_params == 0) return &[_]ParamInfo{};
         return self.params[0..self.n_params];
     }
-
 };
 pub const ParamInfo = extern struct {
-    id: u32,
+    id: ParamType,
     flags: u32,
     user: u32,
     padding: [5]u32,
@@ -74,4 +80,24 @@ pub const ParamInfo = extern struct {
     pub fn isWrite(self: ParamInfo) bool {
         return self.flags & WRITE;
     }
+};
+
+const ParamType = enum(u32) {
+    Invalid,
+    PropInfo,
+    Props,
+    EnumFormat,
+    Format,
+    Buffers,
+    Meta,
+    IO,
+    EnumProfile,
+    Profile,
+    EnumPortConfig,
+    PortConfig,
+    EnumRoute,
+    Route,
+    Control,
+    Latency,
+    ProcessLatency,
 };

@@ -6,9 +6,6 @@ const spa = @import("spa.zig");
 const Proxy = pw.Proxy;
 
 pub const Registry = opaque {
-    // void *data, uint32_t id,
-    // uint32_t permissions, const char *type, uint32_t version,
-    // const struct spa_dict *props
     pub const Global = struct {
         id: u32,
         permissions: u32,
@@ -19,7 +16,7 @@ pub const Registry = opaque {
             return Global{
                 .id = @intCast(u32, args_tuple[0]),
                 .permissions = @intCast(u32, args_tuple[1]),
-                .typ = ObjType.fromString(std.mem.span(@intToPtr([*c]const u8, args_tuple[2]))),
+                .typ = ObjType.fromString(std.mem.span(@intToPtr([*:0]const u8, args_tuple[2]))),
                 .version = @intCast(u32, args_tuple[3]),
                 .props = @intToPtr(*const spa.SpaDict, args_tuple[4]),
             };

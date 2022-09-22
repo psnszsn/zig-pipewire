@@ -12,12 +12,17 @@ pub fn build(b: *std.build.Builder) void {
     // b.setPreferredReleaseMode(.Debug);
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("zig-pw", "src/main.zig");
-    // const exe = b.addExecutable("zig-pw", "out.zig");
+    const pipewire = std.build.Pkg{
+        .name = "pipewire",
+        .source = .{.path = "src/pipewire.zig"}
+    };
+
+    const exe = b.addExecutable("zig-pw", "examples/roundtrip.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.linkLibC();
     exe.linkSystemLibrary("libpipewire-0.3");
+    exe.addPackage(pipewire);
 
     exe.install();
 
@@ -30,10 +35,10 @@ pub fn build(b: *std.build.Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const exe_tests = b.addTest("src/main.zig");
+    const exe_tests = b.addTest("src/pipewire.zig");
     exe_tests.setTarget(target);
     exe_tests.setBuildMode(mode);
 
-    // const test_step = b.step("test", "Run unit tests");
-    // test_step.dependOn(&exe_tests.step);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&exe_tests.step);
 }

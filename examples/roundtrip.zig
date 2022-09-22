@@ -1,12 +1,13 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
-const pw = @import("pipewire.zig");
+const pw = @import("pipewire");
 
 const Global = struct {
     id: u32,
     permissions: u32,
     typ: pw.ObjType,
     listener: ?*pw.utils.Listener = null,
+    proxy: *pw.Proxy,
     version: u32,
     props: std.StringArrayHashMap([]const u8),
     pub fn deinit(self: *Global) void {
@@ -16,7 +17,6 @@ const Global = struct {
 
         var it = self.props.iterator();
         while (it.next()) |prop| {
-            // std.debug.print("key: {s}\n", .{prop.key_ptr.*});
             self.props.allocator.free(prop.key_ptr.*);
             self.props.allocator.free(prop.value_ptr.*);
         }
@@ -43,8 +43,6 @@ const RemoteData = struct {
 pub fn coreListener(data: *RemoteData, event: pw.Core.Event) void {
     _ = data;
     _ = event;
-    // data.deinit();
-    // data.loop.quit();
     std.debug.print("DONE\n", .{});
 }
 pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
@@ -64,7 +62,6 @@ pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
                 g.props = blk: {
                     var it = g.props.iterator();
                     while (it.next()) |prop| {
-                        // std.debug.print("key: {s}\n", .{prop.key_ptr.*});
                         g.props.allocator.free(prop.key_ptr.*);
                         g.props.allocator.free(prop.value_ptr.*);
                     }
@@ -72,9 +69,16 @@ pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
                     break :blk e.props.toArrayHashMap(data.allocator);
                 };
             }
+            for (e.getParamInfos()) |pi| {
+                var node = g.proxy.downcast(pw.Node);
+                if (pi.id == .Props and e.id == data.default_sink_id.?) {
+                    _ = node.enumParams(0, pi.id, 0, 0, null);
+                    std.debug.print("{}\n", .{pi});
+                }
+            }
         },
         .param => |param| {
-            std.debug.print("PARAM {} \n", .{param});
+            std.debug.print("\nPARAM {} \n", .{param});
         },
     }
 }
@@ -85,7 +89,6 @@ pub fn metadataListener(data: *RemoteData, event: pw.Metadata.Event) void {
         defer parser.deinit();
         var tree = parser.parse(prop.value) catch unreachable;
         defer tree.deinit();
-        // tree.root.dump();
 
         if (std.mem.eql(u8, prop.key, "default.audio.sink")) {
             const default_sink = tree.root.Object.get("name").?.String;
@@ -116,24 +119,24 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
                 .id = e.id,
                 .typ = e.typ,
                 .permissions = e.permissions,
+                .proxy = data.registry.bind(e) catch unreachable,
                 .version = e.version,
                 .props = e.props.toArrayHashMap(data.allocator),
             }) catch unreachable;
 
-            var proxy = data.registry.bind(e) catch unreachable;
             var g = data.globals.getPtr(e.id) orelse unreachable;
 
             std.debug.print("GLOBAL added : id:{} type:{} v:{}\n", .{ e.id, e.typ, e.version });
             switch (e.typ) {
                 .Node => {
                     std.debug.print("props: {}\n\n", .{e.props});
-                    var node = proxy.downcast(pw.Node);
+                    var node = g.proxy.downcast(pw.Node);
                     var listener = node.addListener(data.allocator, RemoteData, data, nodeListener);
                     g.listener = listener;
                 },
                 .Metadata => {
                     std.debug.print("METADATA: \n", .{});
-                    var metadata = proxy.downcast(pw.Metadata);
+                    var metadata = g.proxy.downcast(pw.Metadata);
                     var listener = metadata.addListener(data.allocator, RemoteData, data, metadataListener);
                     g.listener = listener;
                 },
@@ -161,7 +164,6 @@ pub fn main() anyerror!void {
         pw.c.pw_get_headers_version(),
         pw.c.pw_get_library_version(),
     });
-    std.log.info("All your codebase are belong to us.", .{});
 
     var loop = try pw.MainLoop.new();
     defer loop.destroy();
@@ -189,25 +191,20 @@ pub fn main() anyerror!void {
     var regitry_hook = registry.addListener(allocator, RemoteData, rd, registryListener);
     defer regitry_hook.deinit();
 
-    // _ = core.sync(pw.c.PW_ID_CORE, 0);
-
     try roundtrip(loop, core, allocator);
     try roundtrip(loop, core, allocator);
     try roundtrip(loop, core, allocator);
-    std.debug.print("default sink: {?s}\n", .{
+    std.debug.print("default sink: {} {?s}\n", .{
+        rd.default_sink_id.?,
         rd.globals.get(rd.default_sink_id.?).?.props.get("node.name"),
     });
-    // try loop.run_();
-    // loop.run_();
 }
 
 pub fn roundtrip(loop: *pw.MainLoop, core: *pw.Core, allocator: std.mem.Allocator) !void {
-    // var done = false;
     _ = core.sync(pw.c.PW_ID_CORE, 0);
     const l = struct {
         pub fn coreListener(_loop: *pw.MainLoop, event: pw.Core.Event) void {
             _ = event;
-            // data.deinit();
             _loop.quit();
             std.debug.print("DONE\n", .{});
         }
@@ -216,7 +213,7 @@ pub fn roundtrip(loop: *pw.MainLoop, core: *pw.Core, allocator: std.mem.Allocato
     var core_hook = core.addListener(allocator, pw.MainLoop, loop, &l);
     defer core_hook.deinit();
 
-    loop.run_();
+    loop.run();
 }
 
 test "basic test" {

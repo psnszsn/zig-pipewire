@@ -10,7 +10,7 @@ pub const Proxy = opaque {
         );
     }
 
-    extern fn pw_proxy_get_type(proxy: *Proxy, version: *u32) [*c]const u8;
+    extern fn pw_proxy_get_type(proxy: *Proxy, version: *u32) [*:0]const u8;
     pub fn getType(self: *Proxy) Tuple(&.{ [:0]const u8, u32 }) {
         var version: u32 = undefined;
         var typ = pw_proxy_get_type(self, &version);

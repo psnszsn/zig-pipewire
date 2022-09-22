@@ -4,14 +4,13 @@ const spa = @import("spa.zig");
 const c = pw.c;
 
 pub const Loop = extern struct {
-    system: [*c]c.struct_spa_system,
-    loop: [*c]c.struct_spa_loop,
-    control: [*c]c.struct_spa_loop_control,
-    utils: [*c]c.struct_spa_loop_utils,
+    system: *c.struct_spa_system,
+    loop: *c.struct_spa_loop,
+    control: *c.struct_spa_loop_control,
+    utils: *c.struct_spa_loop_utils,
 
     pub fn getFd(self: *Loop) i32 {
         const fd = spa.spa_interface_call_method(self.control, c.spa_loop_control_methods, "get_fd", .{});
-        std.debug.print("FD: {}\n", .{fd});
         return fd;
     }
     pub fn iterate(self: *Loop) !isize {

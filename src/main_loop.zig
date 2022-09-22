@@ -4,7 +4,7 @@ const spa = @import("spa.zig");
 const c = pw.c;
 
 pub const MainLoop = opaque {
-    extern fn pw_main_loop_new(props: [*c]const c.struct_spa_dict) ?*MainLoop;
+    extern fn pw_main_loop_new(props: ?*const c.struct_spa_dict) ?*MainLoop;
     pub fn new() !*MainLoop {
         // var loop = @ptrCast(?*MainLoop, c.pw_main_loop_new(null));
         var loop = pw_main_loop_new(null);
@@ -16,11 +16,11 @@ pub const MainLoop = opaque {
         return pw_main_loop_get_loop(self);
     }
     extern fn pw_main_loop_run(loop: *MainLoop) c_int;
-    pub fn run_(self: *MainLoop) void {
+    pub fn run(self: *MainLoop) void {
         _ = pw_main_loop_run(self);
     }
 
-    pub fn run(self: *MainLoop) !void {
+    pub fn run_(self: *MainLoop) !void {
         const os = std.os;
         const pw_epoll_fd = self.getLoop().getFd();
         std.debug.print("Hello\n", .{});

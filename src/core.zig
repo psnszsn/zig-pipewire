@@ -10,7 +10,6 @@ pub const Core = opaque {
             self,
             c.pw_core_methods,
             "get_registry",
-            // ?*c.struct_pw_registry,
             .{ c.PW_VERSION_REGISTRY, 0 },
         );
         if (registry) |r| {
@@ -24,7 +23,6 @@ pub const Core = opaque {
             self,
             c.pw_core_methods,
             "sync",
-            // ?*c.struct_pw_registry,
             .{ id, seq },
         );
     }
