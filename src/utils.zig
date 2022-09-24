@@ -17,7 +17,7 @@ pub fn generateEventsStruct(version: u32, comptime EventsCType: type, comptime E
                             const ev = @unionInit(
                                 EventsUnion,
                                 union_field.name,
-                                @ptrCast(union_field.field_type, arg1),
+                                @ptrCast(union_field.field_type, @alignCast(@alignOf(union_field.field_type), arg1)),
                             );
                             const D = struct { f: *const fn (data: *anyopaque, event: EventsUnion) void, d: *anyopaque };
                             const listener = @ptrCast(*D, @alignCast(@alignOf(*D), _data));
