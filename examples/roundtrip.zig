@@ -78,7 +78,11 @@ pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
             }
         },
         .param => |param| {
-            std.debug.print("\nPARAM {} \n", .{param});
+            std.debug.print("\nPARAM:\n", .{});
+            var tree = param.spa_pod.toJsonTree(data.allocator) catch unreachable;
+            tree.root.dump();
+            tree.deinit();
+            std.debug.print("\n", .{});
         },
     }
 }

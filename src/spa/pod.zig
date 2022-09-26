@@ -51,17 +51,6 @@ pub const ObjBody = extern struct {
             .body_size = body_size,
         };
     }
-    pub fn dump(self: *const ObjBody, body_size: usize) void {
-        var it = self.prop_iterator(body_size);
-        var total: usize = 0;
-        while (it.next()) |curr| {
-            // std.debug.print("\t sz: {} key :{} ;{}\n", .{ curr.size(), curr.key, curr.value.type });
-            // std.debug.print("\t\t value: {}\n", .{curr.value.body()});
-            // std.debug.print("{}\n", .{curr.value.body()});
-            total += round_up_n(curr.size(), 8);
-        }
-        std.debug.print("total: {} expected: {} diff: {}\n", .{ total, body_size, body_size - total });
-    }
 };
 
 pub const ArrayBody = extern struct {
@@ -106,6 +95,71 @@ pub const SpaPodBody = union(enum) {
 pub const SpaPod = extern struct {
     size: u32,
     type: spa_type,
+
+    pub fn toJsonTree(self: *const SpaPod, allocator: std.mem.Allocator) !std.json.ValueTree {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+        const allc = arena.allocator();
+        const root = try self.toJsonValue(allc);
+        return .{
+            .arena = arena,
+            .root = root,
+        };
+    }
+    fn toJsonValue(self: *const SpaPod, allocator: std.mem.Allocator) !std.json.Value {
+        switch (self.body()) {
+            .String => |s| {
+                return std.json.Value{ .String = try allocator.dupe(u8, std.mem.span(s)) };
+            },
+            .Float => |f| {
+                return std.json.Value{ .Float = f.* };
+            },
+            .Double => |f| {
+                return std.json.Value{ .Float = f.* };
+            },
+            .Int => |i| {
+                return std.json.Value{ .Integer = i.* };
+            },
+            .Long => |i| {
+                return std.json.Value{ .Integer = i.* };
+            },
+            .Bool => |f| {
+                return std.json.Value{ .Bool = f.* };
+            },
+            .Array => |_| {
+                var arr = std.json.Array.init(allocator);
+                return std.json.Value{ .Array = arr };
+            },
+            .Object => |o| {
+                var om = std.json.ObjectMap.init(allocator);
+                var it = o.prop_iterator(self.size);
+                while (it.next()) |c| {
+                    const key = @tagName(c.key);
+                    const val = try c.value.toJsonValue(allocator);
+                    try om.put(key, val);
+                }
+                return std.json.Value{ .Object = om };
+            },
+            .Struct => |s| {
+                var om = std.json.ObjectMap.init(allocator);
+                var it = s.iterator();
+
+                var key: []u8 = undefined;
+                var i: usize = 0;
+                while (it.next()) |c| {
+                    if (i % 2 == 0) {
+                        key = try allocator.dupe(u8, std.mem.span(c.body().String));
+                        i += 1;
+                        continue;
+                    }
+                    const val = try c.toJsonValue(allocator);
+                    try om.putNoClobber(key, val);
+                    i += 1;
+                }
+                return std.json.Value{ .Object = om };
+            },
+        }
+    }
 
     pub fn next(self: *const SpaPod) *const SpaPod {
         const next_ptr = @ptrToInt(self) + round_up_n(@sizeOf(SpaPod) + self.size, 8);
