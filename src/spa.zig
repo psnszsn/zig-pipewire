@@ -1,5 +1,6 @@
 const std = @import("std");
 pub const SpaPod = @import("spa/pod.zig").SpaPod;
+pub const pod = @import("spa/pod.zig");
 const c = @cImport({
     @cInclude("pipewire/pipewire.h");
 });
@@ -61,7 +62,7 @@ test {
         }
     }.hello };
 
-    const obj = struct_obj{ .proxy = .{ .interface = .{
+    var obj = struct_obj{ .proxy = .{ .interface = .{
         .type = "obj",
         .version = 0,
         .cb = .{

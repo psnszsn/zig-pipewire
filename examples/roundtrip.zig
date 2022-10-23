@@ -14,6 +14,7 @@ const Global = struct {
         if (self.listener) |l| {
             l.deinit();
         }
+        self.proxy.destroy();
 
         var it = self.props.iterator();
         while (it.next()) |prop| {
@@ -45,6 +46,49 @@ pub fn coreListener(data: *RemoteData, event: pw.Core.Event) void {
     _ = event;
     std.debug.print("DONE\n", .{});
 }
+pub fn deviceListener(data: *RemoteData, event: pw.Device.Event) void {
+    switch (event) {
+        .info => |e| {
+            var g = data.globals.getPtr(e.id).?;
+            std.debug.assert(g.typ == .Device);
+
+            std.debug.print("DEVICE INFO {} - {?s} - {} props - {} params\n", .{
+                e.id,
+                g.props.get("device.name"),
+                e.props.asSlice().len,
+                e.n_params,
+            });
+
+            if (e.props.n_items > 0) {
+                g.props = blk: {
+                    var it = g.props.iterator();
+                    while (it.next()) |prop| {
+                        g.props.allocator.free(prop.key_ptr.*);
+                        g.props.allocator.free(prop.value_ptr.*);
+                    }
+                    g.props.deinit();
+                    break :blk e.props.toArrayHashMap(data.allocator);
+                };
+            }
+            for (e.getParamInfos()) |pi| {
+                var node = g.proxy.downcast(pw.Device);
+                // if (pi.id == .Props and e.id == data.default_sink_id.?) {
+                _ = node.enumParams(0, pi.id, 0, 0, null);
+                std.debug.print("{}\n", .{pi});
+                // }
+            }
+        },
+        .param => |param| {
+            // std.debug.print("\nPARAM:\n", .{});
+            var copy = param.spa_pod.copy(data.allocator) catch unreachable;
+            copy.deinit(data.allocator);
+            // var tree = param.spa_pod.toJsonTree(data.allocator) catch unreachable;
+            // tree.root.dump();
+            // tree.deinit();
+            // std.debug.print("\n", .{});
+        },
+    }
+}
 pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
     switch (event) {
         .info => |e| {
@@ -69,20 +113,22 @@ pub fn nodeListener(data: *RemoteData, event: pw.Node.Event) void {
                     break :blk e.props.toArrayHashMap(data.allocator);
                 };
             }
-            for (e.getParamInfos()) |pi| {
-                var node = g.proxy.downcast(pw.Node);
-                if (pi.id == .Props and e.id == data.default_sink_id.?) {
-                    _ = node.enumParams(0, pi.id, 0, 0, null);
-                    std.debug.print("{}\n", .{pi});
-                }
-            }
+            // for (e.getParamInfos()) |pi| {
+            //     var node = g.proxy.downcast(pw.Node);
+            //     if (pi.id == .Props and e.id == data.default_sink_id.?) {
+            //         _ = node.enumParams(0, pi.id, 0, 0, null);
+            //         std.debug.print("{}\n", .{pi});
+            //     }
+            // }
         },
-        .param => |param| {
-            std.debug.print("\nPARAM:\n", .{});
-            var tree = param.spa_pod.toJsonTree(data.allocator) catch unreachable;
-            tree.root.dump();
-            tree.deinit();
-            std.debug.print("\n", .{});
+        .param => |_| {
+            // std.debug.print("\nPARAM:\n", .{});
+            // var copy = param.spa_pod.copy(data.allocator) catch unreachable;
+            // copy.deinit(data.allocator);
+            // var tree = param.spa_pod.toJsonTree(data.allocator) catch unreachable;
+            // tree.root.dump();
+            // tree.deinit();
+            // std.debug.print("\n", .{});
         },
     }
 }
@@ -130,16 +176,22 @@ pub fn registryListener(data: *RemoteData, event: pw.Registry.Event) void {
 
             var g = data.globals.getPtr(e.id) orelse unreachable;
 
-            std.debug.print("GLOBAL added : id:{} type:{} v:{}\n", .{ e.id, e.typ, e.version });
+            // std.debug.print("GLOBAL added : id:{} type:{} v:{}\n", .{ e.id, e.typ, e.version });
             switch (e.typ) {
                 .Node => {
-                    std.debug.print("props: {}\n\n", .{e.props});
+                    std.debug.print("Node {} props: {}\n\n", .{e.id, e.props});
                     var node = g.proxy.downcast(pw.Node);
                     var listener = node.addListener(data.allocator, RemoteData, data, nodeListener);
                     g.listener = listener;
                 },
+                .Device => {
+                    std.debug.print("device: {}\n\n", .{e.props});
+                    var device = g.proxy.downcast(pw.Device);
+                    var listener = device.addListener(data.allocator, RemoteData, data, deviceListener);
+                    g.listener = listener;
+                },
                 .Metadata => {
-                    std.debug.print("METADATA: \n", .{});
+                    // std.debug.print("METADATA: \n", .{});
                     var metadata = g.proxy.downcast(pw.Metadata);
                     var listener = metadata.addListener(data.allocator, RemoteData, data, metadataListener);
                     g.listener = listener;
@@ -198,9 +250,28 @@ pub fn main() anyerror!void {
     try roundtrip(loop, core, allocator);
     try roundtrip(loop, core, allocator);
     try roundtrip(loop, core, allocator);
-    std.debug.print("default sink: {} {?s}\n", .{
+
+    var default_sink = rd.globals.get(rd.default_sink_id.?).?;
+    // var node = default_sink.proxy.downcast(pw.Node);
+
+    // var b = pw.spa.pod.Builder.init(rd.allocator);
+    // defer b.deinit();
+
+    // try b.add(.Object, .{
+    //     .{ .mute, .{ .Bool, .{@as(u32, 1)} } },
+    // });
+
+    // const res = node.setParam(pw.c.SPA_PARAM_Props, 0, b.deref());
+    // std.debug.print("res {}\n", .{res});
+
+    // try roundtrip(loop, core, allocator);
+    // try roundtrip(loop, core, allocator);
+    // try roundtrip(loop, core, allocator);
+
+    std.debug.print("default sink: {} {?s} {?s}\n", .{
         rd.default_sink_id.?,
-        rd.globals.get(rd.default_sink_id.?).?.props.get("node.name"),
+        default_sink.props.get("node.name"),
+        default_sink.props.get("device.id"),
     });
 }
 

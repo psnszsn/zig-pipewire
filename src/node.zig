@@ -39,12 +39,21 @@ pub const Node = opaque {
         return listener;
     }
 
-    pub fn enumParams(self: *Node, seq: c_int, id: ParamType, index: u32, num: u32, filter: ?*spa.SpaPod) isize {
+    pub fn enumParams(self: *Node, seq: c_int, id: ParamInfo.ParamType, index: u32, num: u32, filter: ?*spa.SpaPod) isize {
         return spa.spa_interface_call_method(
             self,
             c.pw_node_methods,
             "enum_params",
             .{ seq, @enumToInt(id), index, num, @ptrCast(?*c.struct_spa_pod, filter) },
+        );
+    }
+
+    pub fn setParam(self: *Node, id: u32, flags: u32, pod: *const spa.SpaPod) isize {
+        return spa.spa_interface_call_method(
+            self,
+            c.pw_node_methods,
+            "set_param",
+            .{ id, flags, @ptrCast(?*const c.struct_spa_pod, pod) },
         );
     }
 };
@@ -67,6 +76,25 @@ pub const NodeInfo = extern struct {
     }
 };
 pub const ParamInfo = extern struct {
+    pub const ParamType = enum(u32) {
+        Invalid,
+        PropInfo,
+        Props,
+        EnumFormat,
+        Format,
+        Buffers,
+        Meta,
+        IO,
+        EnumProfile,
+        Profile,
+        EnumPortConfig,
+        PortConfig,
+        EnumRoute,
+        Route,
+        Control,
+        Latency,
+        ProcessLatency,
+    };
     id: ParamType,
     flags: u32,
     user: u32,
@@ -80,24 +108,4 @@ pub const ParamInfo = extern struct {
     pub fn isWrite(self: ParamInfo) bool {
         return self.flags & WRITE;
     }
-};
-
-const ParamType = enum(u32) {
-    Invalid,
-    PropInfo,
-    Props,
-    EnumFormat,
-    Format,
-    Buffers,
-    Meta,
-    IO,
-    EnumProfile,
-    Profile,
-    EnumPortConfig,
-    PortConfig,
-    EnumRoute,
-    Route,
-    Control,
-    Latency,
-    ProcessLatency,
 };
